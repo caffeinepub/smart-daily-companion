@@ -10,6 +10,9 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export type GenerateScheduleResult = { 'ok' : Array<TimeBlock> } |
+  { 'limitReached' : null } |
+  { 'profileNotFound' : null };
 export interface Habit {
   'id' : bigint,
   'name' : string,
@@ -24,6 +27,9 @@ export interface HabitWithStats {
 export type MotivationTone = { 'calm' : null } |
   { 'energetic' : null } |
   { 'professional' : null };
+export type SubscriptionStatus = { 'premium' : null } |
+  { 'free' : null } |
+  { 'lifetime' : null };
 export interface Task {
   'id' : bigint,
   'title' : string,
@@ -43,11 +49,11 @@ export interface TimeBlock {
   'notes' : string,
 }
 export interface UserProfile {
-  'isPremium' : boolean,
   'motivationTone' : MotivationTone,
   'name' : string,
   'sleepTime' : bigint,
   'wakeTime' : bigint,
+  'subscriptionStatus' : SubscriptionStatus,
   'goals' : Array<string>,
 }
 export type UserRole = { 'admin' : null } |
@@ -63,7 +69,7 @@ export interface _SERVICE {
   'createTask' : ActorMethod<[Task], bigint>,
   'deleteHabit' : ActorMethod<[bigint], undefined>,
   'deleteTask' : ActorMethod<[bigint], undefined>,
-  'generateSchedule' : ActorMethod<[string], Array<TimeBlock>>,
+  'generateSchedule' : ActorMethod<[string], GenerateScheduleResult>,
   'getAllHabits' : ActorMethod<[], Array<HabitWithStats>>,
   'getAllTasks' : ActorMethod<[], Array<Task>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
@@ -75,9 +81,11 @@ export interface _SERVICE {
       { 'habit' : Habit, 'completionRate' : bigint, 'checkIns' : Array<string> }
     ]
   >,
+  'getIsPremium' : ActorMethod<[], boolean>,
   'getMotivationalMessage' : ActorMethod<[string, boolean], [] | [string]>,
   'getProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getSchedule' : ActorMethod<[string], [] | [Array<TimeBlock>]>,
+  'getSubscriptionStatus' : ActorMethod<[], [] | [SubscriptionStatus]>,
   'getTask' : ActorMethod<[bigint], [] | [Task]>,
   'getTasksByDate' : ActorMethod<[string], Array<Task>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
@@ -87,6 +95,7 @@ export interface _SERVICE {
   'updateHabit' : ActorMethod<[bigint, Habit], undefined>,
   'updateSchedule' : ActorMethod<[string, Array<TimeBlock>], undefined>,
   'updateTask' : ActorMethod<[bigint, Task], undefined>,
+  'upgradeSubscription' : ActorMethod<[SubscriptionStatus], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

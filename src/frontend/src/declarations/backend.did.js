@@ -24,12 +24,17 @@ export const MotivationTone = IDL.Variant({
   'energetic' : IDL.Null,
   'professional' : IDL.Null,
 });
+export const SubscriptionStatus = IDL.Variant({
+  'premium' : IDL.Null,
+  'free' : IDL.Null,
+  'lifetime' : IDL.Null,
+});
 export const UserProfile = IDL.Record({
-  'isPremium' : IDL.Bool,
   'motivationTone' : MotivationTone,
   'name' : IDL.Text,
   'sleepTime' : IDL.Nat,
   'wakeTime' : IDL.Nat,
+  'subscriptionStatus' : SubscriptionStatus,
   'goals' : IDL.Vec(IDL.Text),
 });
 export const TaskPriority = IDL.Variant({
@@ -52,6 +57,11 @@ export const TimeBlock = IDL.Record({
   'endTime' : IDL.Nat,
   'notes' : IDL.Text,
 });
+export const GenerateScheduleResult = IDL.Variant({
+  'ok' : IDL.Vec(TimeBlock),
+  'limitReached' : IDL.Null,
+  'profileNotFound' : IDL.Null,
+});
 export const HabitWithStats = IDL.Record({
   'streak' : IDL.Nat,
   'habit' : Habit,
@@ -68,7 +78,7 @@ export const idlService = IDL.Service({
   'createTask' : IDL.Func([Task], [IDL.Nat], []),
   'deleteHabit' : IDL.Func([IDL.Nat], [], []),
   'deleteTask' : IDL.Func([IDL.Nat], [], []),
-  'generateSchedule' : IDL.Func([IDL.Text], [IDL.Vec(TimeBlock)], []),
+  'generateSchedule' : IDL.Func([IDL.Text], [GenerateScheduleResult], []),
   'getAllHabits' : IDL.Func([], [IDL.Vec(HabitWithStats)], ['query']),
   'getAllTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
@@ -87,6 +97,7 @@ export const idlService = IDL.Service({
       ],
       ['query'],
     ),
+  'getIsPremium' : IDL.Func([], [IDL.Bool], ['query']),
   'getMotivationalMessage' : IDL.Func(
       [IDL.Text, IDL.Bool],
       [IDL.Opt(IDL.Text)],
@@ -96,6 +107,11 @@ export const idlService = IDL.Service({
   'getSchedule' : IDL.Func(
       [IDL.Text],
       [IDL.Opt(IDL.Vec(TimeBlock))],
+      ['query'],
+    ),
+  'getSubscriptionStatus' : IDL.Func(
+      [],
+      [IDL.Opt(SubscriptionStatus)],
       ['query'],
     ),
   'getTask' : IDL.Func([IDL.Nat], [IDL.Opt(Task)], ['query']),
@@ -111,6 +127,7 @@ export const idlService = IDL.Service({
   'updateHabit' : IDL.Func([IDL.Nat, Habit], [], []),
   'updateSchedule' : IDL.Func([IDL.Text, IDL.Vec(TimeBlock)], [], []),
   'updateTask' : IDL.Func([IDL.Nat, Task], [], []),
+  'upgradeSubscription' : IDL.Func([SubscriptionStatus], [], []),
 });
 
 export const idlInitArgs = [];
@@ -132,12 +149,17 @@ export const idlFactory = ({ IDL }) => {
     'energetic' : IDL.Null,
     'professional' : IDL.Null,
   });
+  const SubscriptionStatus = IDL.Variant({
+    'premium' : IDL.Null,
+    'free' : IDL.Null,
+    'lifetime' : IDL.Null,
+  });
   const UserProfile = IDL.Record({
-    'isPremium' : IDL.Bool,
     'motivationTone' : MotivationTone,
     'name' : IDL.Text,
     'sleepTime' : IDL.Nat,
     'wakeTime' : IDL.Nat,
+    'subscriptionStatus' : SubscriptionStatus,
     'goals' : IDL.Vec(IDL.Text),
   });
   const TaskPriority = IDL.Variant({
@@ -160,6 +182,11 @@ export const idlFactory = ({ IDL }) => {
     'endTime' : IDL.Nat,
     'notes' : IDL.Text,
   });
+  const GenerateScheduleResult = IDL.Variant({
+    'ok' : IDL.Vec(TimeBlock),
+    'limitReached' : IDL.Null,
+    'profileNotFound' : IDL.Null,
+  });
   const HabitWithStats = IDL.Record({
     'streak' : IDL.Nat,
     'habit' : Habit,
@@ -176,7 +203,7 @@ export const idlFactory = ({ IDL }) => {
     'createTask' : IDL.Func([Task], [IDL.Nat], []),
     'deleteHabit' : IDL.Func([IDL.Nat], [], []),
     'deleteTask' : IDL.Func([IDL.Nat], [], []),
-    'generateSchedule' : IDL.Func([IDL.Text], [IDL.Vec(TimeBlock)], []),
+    'generateSchedule' : IDL.Func([IDL.Text], [GenerateScheduleResult], []),
     'getAllHabits' : IDL.Func([], [IDL.Vec(HabitWithStats)], ['query']),
     'getAllTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
@@ -195,6 +222,7 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getIsPremium' : IDL.Func([], [IDL.Bool], ['query']),
     'getMotivationalMessage' : IDL.Func(
         [IDL.Text, IDL.Bool],
         [IDL.Opt(IDL.Text)],
@@ -204,6 +232,11 @@ export const idlFactory = ({ IDL }) => {
     'getSchedule' : IDL.Func(
         [IDL.Text],
         [IDL.Opt(IDL.Vec(TimeBlock))],
+        ['query'],
+      ),
+    'getSubscriptionStatus' : IDL.Func(
+        [],
+        [IDL.Opt(SubscriptionStatus)],
         ['query'],
       ),
     'getTask' : IDL.Func([IDL.Nat], [IDL.Opt(Task)], ['query']),
@@ -219,6 +252,7 @@ export const idlFactory = ({ IDL }) => {
     'updateHabit' : IDL.Func([IDL.Nat, Habit], [], []),
     'updateSchedule' : IDL.Func([IDL.Text, IDL.Vec(TimeBlock)], [], []),
     'updateTask' : IDL.Func([IDL.Nat, Task], [], []),
+    'upgradeSubscription' : IDL.Func([SubscriptionStatus], [], []),
   });
 };
 

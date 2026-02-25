@@ -6,7 +6,9 @@ import type {
   Habit,
   HabitWithStats,
   TimeBlock,
+  GenerateScheduleResult,
 } from "../backend.d";
+import { SubscriptionStatus } from "../backend.d";
 import { getTodayString } from "../utils/timeUtils";
 
 // ──────────────────────────────────────────────
@@ -123,7 +125,7 @@ export function useSchedule(date: string) {
 export function useGenerateSchedule() {
   const qc = useQueryClient();
   const { actor } = useActor();
-  return useMutation({
+  return useMutation<GenerateScheduleResult, Error, string>({
     mutationFn: (date: string) => {
       if (!actor) throw new Error("Not connected");
       return actor.generateSchedule(date);
@@ -266,5 +268,57 @@ export function useStoreMotivationalMessage() {
     },
     onSuccess: (_, { date, isEvening }) =>
       qc.invalidateQueries({ queryKey: ["motivation", date, isEvening] }),
+  });
+}
+
+// ──────────────────────────────────────────────
+// Subscription
+// ──────────────────────────────────────────────
+
+export function useSubscriptionStatus() {
+  const { actor, isFetching } = useActor();
+  return useQuery<SubscriptionStatus | null>({
+    queryKey: ["subscriptionStatus"],
+    queryFn: async () => {
+      if (!actor) return null;
+      try {
+        return await actor.getSubscriptionStatus();
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useIsPremium() {
+  const { actor, isFetching } = useActor();
+  return useQuery<boolean>({
+    queryKey: ["isPremium"],
+    queryFn: async () => {
+      if (!actor) return false;
+      try {
+        return await actor.getIsPremium();
+      } catch {
+        return false;
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useUpgradeSubscription() {
+  const qc = useQueryClient();
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: (status: SubscriptionStatus) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.upgradeSubscription(status);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptionStatus"] });
+      qc.invalidateQueries({ queryKey: ["isPremium"] });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+    },
   });
 }

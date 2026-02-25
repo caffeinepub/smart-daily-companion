@@ -1,4 +1,5 @@
 import Map "mo:core/Map";
+import List "mo:core/List";
 import Text "mo:core/Text";
 import Int "mo:core/Int";
 import Iter "mo:core/Iter";
@@ -7,22 +8,24 @@ import Order "mo:core/Order";
 import Nat "mo:core/Nat";
 import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
-import List "mo:core/List";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+
+
 
 actor {
   // Custom types
   type TaskPriority = { #low; #medium; #high };
   type MotivationTone = { #calm; #energetic; #professional };
+  type SubscriptionStatus = { #free; #premium; #lifetime };
 
   type UserProfile = {
     name : Text;
     motivationTone : MotivationTone;
-    isPremium : Bool;
     wakeTime : Nat;
     sleepTime : Nat;
     goals : [Text];
+    subscriptionStatus : SubscriptionStatus;
   };
 
   type Task = {
@@ -66,7 +69,6 @@ actor {
     completionRate : Nat;
   };
 
-  // Comparison modules
   module Task {
     public func compare(task1 : Task, task2 : Task) : Order.Order {
       Int.compare(task1.id, task2.id);
@@ -84,6 +86,12 @@ actor {
   let habitCheckIns = Map.empty<Principal, List.List<HabitCheckIn>>();
   let motivationalMessages = Map.empty<Principal, Map.Map<Text, MotivationalMessage>>();
   let dailyGenerationCount = Map.empty<Principal, Map.Map<Text, Nat>>();
+
+  type GenerateScheduleResult = {
+    #ok : [TimeBlock];
+    #limitReached;
+    #profileNotFound;
+  };
 
   // Helper functions
   func getNextTaskId(user : Principal) : Nat {
@@ -176,6 +184,93 @@ actor {
     let last7Days = checkIns.toArray().filter(func(c) { c.habitId == habitId });
     if (last7Days.size() == 0) { return 0 };
     (last7Days.size() * 100) / 7;
+  };
+
+  // Subscription Management
+  public query ({ caller }) func getSubscriptionStatus() : async ?SubscriptionStatus {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can get subscription status");
+    };
+    switch (userProfiles.get(caller)) {
+      case (null) { null };
+      case (?profile) { ?profile.subscriptionStatus };
+    };
+  };
+
+  public shared ({ caller }) func upgradeSubscription(status : SubscriptionStatus) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can upgrade subscription");
+    };
+
+    let currentProfile = switch (userProfiles.get(caller)) {
+      case (null) { Runtime.trap("Profile not found") };
+      case (?p) { p };
+    };
+
+    let callerRole = AccessControl.getUserRole(accessControlState, caller);
+
+    if (callerRole == #admin) {
+      let updatedProfile = {
+        currentProfile with subscriptionStatus = status;
+      };
+      userProfiles.add(caller, updatedProfile);
+      return ();
+    };
+
+    switch (currentProfile.subscriptionStatus, status) {
+      case (#free, #premium) {
+        let updatedProfile = {
+          currentProfile with subscriptionStatus = #premium;
+        };
+        userProfiles.add(caller, updatedProfile);
+      };
+      case (#free, #lifetime) {
+        let updatedProfile = {
+          currentProfile with subscriptionStatus = #lifetime;
+        };
+        userProfiles.add(caller, updatedProfile);
+      };
+      case (#premium, #lifetime) {
+        let updatedProfile = {
+          currentProfile with subscriptionStatus = #lifetime;
+        };
+        userProfiles.add(caller, updatedProfile);
+      };
+      case (#free, #free) {
+        Runtime.trap("No change. Already on free plan");
+      };
+      case (#premium, #premium) {
+        Runtime.trap("No change. Already on premium plan");
+      };
+      case (#lifetime, _) {
+        Runtime.trap("No change. Already on lifetime plan. No further upgrades allowed");
+      };
+      case (#premium, #free) {
+        Runtime.trap("Downgrades from premium to free are not supported");
+      };
+      case (#lifetime, _) {
+        Runtime.trap("Downgrades for lifetime subscriptions are not supported");
+      };
+      case (_, _) {
+        Runtime.trap("Subscription change is not allowed");
+      };
+    };
+  };
+
+  public query ({ caller }) func getIsPremium() : async Bool {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can check premium status");
+    };
+    switch (userProfiles.get(caller)) {
+      case (null) { false };
+      case (?profile) {
+        switch (profile.subscriptionStatus) {
+          case (#premium) { true };
+          case (#lifetime) { true };
+          case (#free) { false };
+        };
+      };
+    };
   };
 
   // User Profile - Required by frontend
@@ -334,26 +429,32 @@ actor {
   };
 
   // Schedule - with ownership verification and generation limits
-  public shared ({ caller }) func generateSchedule(date : Text) : async [TimeBlock] {
+  public shared ({ caller }) func generateSchedule(date : Text) : async GenerateScheduleResult {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can generate schedules");
     };
 
     let profile = switch (userProfiles.get(caller)) {
-      case (null) { Runtime.trap("Profile not found. Please create a profile first.") };
+      case (null) { return #profileNotFound };
       case (?p) { p };
     };
 
     let currentCount = getGenerationCount(caller, date);
-    if (not profile.isPremium and currentCount >= 3) {
-      Runtime.trap("Daily generation limit reached. Upgrade to premium for unlimited generations.");
+
+    switch (profile.subscriptionStatus) {
+      case (#free) {
+        if (currentCount >= 3) {
+          return #limitReached;
+        };
+      };
+      case (_) {}; // No limit for premium and lifetime
     };
 
     let dayTasks = await getTasksByDate(date);
     let incompleteTasks = dayTasks.filter(func(t) { not t.isCompleted });
 
     if (incompleteTasks.size() == 0) {
-      return [];
+      return #ok([]);
     };
 
     let wakeTime = profile.wakeTime;
@@ -376,7 +477,7 @@ actor {
     };
 
     if (totalTaskMinutes + breakMinutes > availableMinutes) {
-      Runtime.trap("Not enough time in the day for all tasks");
+      return #ok([]);
     };
 
     var blocks : [TimeBlock] = [];
@@ -407,7 +508,7 @@ actor {
 
     ignore incrementGenerationCount(caller, date);
 
-    blocks;
+    #ok(blocks);
   };
 
   public shared ({ caller }) func updateSchedule(date : Text, blocks : [TimeBlock]) : async () {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   useGenerateSchedule,
   useGenerationCount,
   useUpdateSchedule,
+  useIsPremium,
 } from "../hooks/useQueries";
 import {
   getTodayString,
@@ -24,6 +25,7 @@ import {
 } from "../utils/timeUtils";
 import { TaskPriority } from "../backend.d";
 import type { TimeBlock } from "../backend.d";
+import Paywall from "./Paywall";
 import {
   Plus,
   Trash2,
@@ -71,6 +73,7 @@ export default function Planner() {
   const { data: tasks, isLoading: tasksLoading } = useTasksByDate(today);
   const { data: schedule, isLoading: scheduleLoading } = useSchedule(today);
   const { data: genCount } = useGenerationCount(today);
+  const { data: isPremium } = useIsPremium();
 
   const createTask = useCreateTask();
   const completeTask = useCompleteTask();
@@ -85,10 +88,21 @@ export default function Planner() {
     TaskPriority.medium
   );
   const [editingBlock, setEditingBlock] = useState<EditingBlock | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const generateSectionRef = useRef<HTMLElement>(null);
+
+  // Auto-scroll to the Generate section when the Planner first mounts
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      generateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const usedGenerations = Number(genCount ?? 0n);
   const generationsLeft = Math.max(0, MAX_FREE_GENERATIONS - usedGenerations);
-  const isQuotaReached = generationsLeft === 0;
+  // Only enforce quota for free users; premium users always have access
+  const isQuotaReached = !isPremium && generationsLeft === 0;
 
   async function handleAddTask() {
     const title = taskTitle.trim();
@@ -131,10 +145,15 @@ export default function Planner() {
   }
 
   async function handleGenerateSchedule() {
-    if (isQuotaReached) return;
     try {
-      await generateSchedule.mutateAsync(today);
-      toast.success("Schedule generated! ✨");
+      const result = await generateSchedule.mutateAsync(today);
+      if (result.__kind__ === "ok") {
+        toast.success("Schedule generated! ✨");
+      } else if (result.__kind__ === "limitReached") {
+        setShowPaywall(true);
+      } else if (result.__kind__ === "profileNotFound") {
+        toast.error("Profile not found. Please complete onboarding first.");
+      }
     } catch {
       toast.error("Couldn't generate schedule.");
     }
@@ -339,12 +358,13 @@ export default function Planner() {
       </section>
 
       {/* Generate Schedule */}
-      <section className="mb-5">
+      <section ref={generateSectionRef} className="mb-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display text-sm font-700 text-muted-foreground uppercase tracking-wide">
             AI Schedule
           </h2>
-          {!isQuotaReached ? (
+          {/* Show generate button: always for premium, or for free users who haven't hit quota */}
+          {(isPremium || !isQuotaReached) && (
             <Button
               onClick={handleGenerateSchedule}
               disabled={generateSchedule.isPending}
@@ -356,13 +376,15 @@ export default function Planner() {
               ) : (
                 <Sparkles className="w-3.5 h-3.5" />
               )}
-              Generate ({generationsLeft}/{MAX_FREE_GENERATIONS} left)
+              {isPremium
+                ? "Generate (Unlimited)"
+                : `Generate (${generationsLeft}/${MAX_FREE_GENERATIONS} left)`}
             </Button>
-          ) : null}
+          )}
         </div>
 
-        {/* Premium upsell */}
-        {isQuotaReached && (
+        {/* Premium upsell — only shown to free users who hit their quota */}
+        {isQuotaReached && !isPremium && (
           <div className="rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 p-4 flex items-center gap-3 mb-4">
             <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
               <Lock className="w-4 h-4 text-primary" />
@@ -375,7 +397,12 @@ export default function Planner() {
                 Upgrade to Premium for unlimited AI planning.
               </p>
             </div>
-            <Button size="sm" className="rounded-xl text-xs shrink-0" variant="outline">
+            <Button
+              size="sm"
+              className="rounded-xl text-xs shrink-0"
+              variant="outline"
+              onClick={() => setShowPaywall(true)}
+            >
               Upgrade
             </Button>
           </div>
@@ -505,7 +532,7 @@ export default function Planner() {
           <div className="rounded-2xl bg-muted/40 border border-border/40 p-5 text-center">
             <Sparkles className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">
-              {isQuotaReached
+              {isQuotaReached && !isPremium
                 ? "Upgrade to Premium to generate more schedules today."
                 : "Tap 'Generate' to create your AI-powered schedule."}
             </p>
@@ -514,6 +541,12 @@ export default function Planner() {
       </section>
 
       <div className="h-2" />
+
+      <Paywall
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onSuccess={() => setShowPaywall(false)}
+      />
     </div>
   );
 }

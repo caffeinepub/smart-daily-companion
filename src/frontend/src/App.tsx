@@ -22,7 +22,7 @@ function TabSkeleton() {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [activeTab, setActiveTab] = useState<TabId>("planner");
   const [onboardingDone, setOnboardingDone] = useState<boolean>(() => {
     return localStorage.getItem("onboardingDone") === "true";
   });

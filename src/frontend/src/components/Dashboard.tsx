@@ -11,6 +11,8 @@ import {
   useCompleteTask,
   useCheckInHabit,
   useProfile,
+  useIsPremium,
+  useSubscriptionStatus,
 } from "../hooks/useQueries";
 import {
   getTodayString,
@@ -20,7 +22,8 @@ import {
   minutesToTime,
   minutesToDuration,
 } from "../utils/timeUtils";
-import { CheckCircle2, Clock, Flame, Star, Quote } from "lucide-react";
+import { SubscriptionStatus } from "../backend.d";
+import { CheckCircle2, Clock, Flame, Star, Quote, Crown } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Dashboard() {
@@ -33,6 +36,8 @@ export default function Dashboard() {
   const { data: habits, isLoading: habitsLoading } = useAllHabits();
   const { data: motivationMsg, isLoading: motivationLoading } =
     useMotivationalMessage(today, evening);
+  const { data: isPremium } = useIsPremium();
+  const { data: subscriptionStatus } = useSubscriptionStatus();
   const completeTask = useCompleteTask();
   const checkInHabit = useCheckInHabit();
 
@@ -75,9 +80,19 @@ export default function Dashboard() {
       {/* Header */}
       <div className="aurora-bg px-5 pt-6 pb-5 rounded-b-3xl mb-4">
         <div className="mb-3">
-          <h1 className="font-display text-2xl font-800 text-foreground">
-            {greeting}
-          </h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="font-display text-2xl font-800 text-foreground">
+              {greeting}
+            </h1>
+            {isPremium && (
+              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-xs font-700">
+                <Crown className="w-3 h-3" />
+                {subscriptionStatus === SubscriptionStatus.lifetime
+                  ? "Lifetime"
+                  : "Premium"}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground font-medium mt-0.5">
             {dateLabel}
           </p>

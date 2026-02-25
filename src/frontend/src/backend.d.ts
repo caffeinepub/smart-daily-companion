@@ -7,6 +7,16 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
+export type GenerateScheduleResult = {
+    __kind__: "ok";
+    ok: Array<TimeBlock>;
+} | {
+    __kind__: "limitReached";
+    limitReached: null;
+} | {
+    __kind__: "profileNotFound";
+    profileNotFound: null;
+};
 export interface HabitWithStats {
     streak: bigint;
     habit: Habit;
@@ -34,17 +44,22 @@ export interface Habit {
     targetDaysPerWeek: bigint;
 }
 export interface UserProfile {
-    isPremium: boolean;
     motivationTone: MotivationTone;
     name: string;
     sleepTime: bigint;
     wakeTime: bigint;
+    subscriptionStatus: SubscriptionStatus;
     goals: Array<string>;
 }
 export enum MotivationTone {
     calm = "calm",
     energetic = "energetic",
     professional = "professional"
+}
+export enum SubscriptionStatus {
+    premium = "premium",
+    free = "free",
+    lifetime = "lifetime"
 }
 export enum TaskPriority {
     low = "low",
@@ -65,7 +80,7 @@ export interface backendInterface {
     createTask(task: Task): Promise<bigint>;
     deleteHabit(habitId: bigint): Promise<void>;
     deleteTask(taskId: bigint): Promise<void>;
-    generateSchedule(date: string): Promise<Array<TimeBlock>>;
+    generateSchedule(date: string): Promise<GenerateScheduleResult>;
     getAllHabits(): Promise<Array<HabitWithStats>>;
     getAllTasks(): Promise<Array<Task>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
@@ -76,9 +91,11 @@ export interface backendInterface {
         completionRate: bigint;
         checkIns: Array<string>;
     } | null>;
+    getIsPremium(): Promise<boolean>;
     getMotivationalMessage(date: string, isEvening: boolean): Promise<string | null>;
     getProfile(): Promise<UserProfile | null>;
     getSchedule(date: string): Promise<Array<TimeBlock> | null>;
+    getSubscriptionStatus(): Promise<SubscriptionStatus | null>;
     getTask(taskId: bigint): Promise<Task | null>;
     getTasksByDate(date: string): Promise<Array<Task>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
@@ -88,4 +105,5 @@ export interface backendInterface {
     updateHabit(habitId: bigint, habit: Habit): Promise<void>;
     updateSchedule(date: string, blocks: Array<TimeBlock>): Promise<void>;
     updateTask(taskId: bigint, task: Task): Promise<void>;
+    upgradeSubscription(status: SubscriptionStatus): Promise<void>;
 }

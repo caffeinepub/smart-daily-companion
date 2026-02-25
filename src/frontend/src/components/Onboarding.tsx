@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MotivationTone } from "../backend.d";
+import { MotivationTone, SubscriptionStatus } from "../backend.d";
 import { useSaveProfile } from "../hooks/useQueries";
 import { useGenerateSchedule } from "../hooks/useQueries";
 import { getTodayString, timeStringToMinutes } from "../utils/timeUtils";
@@ -94,7 +94,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         wakeTime: timeStringToMinutes(wakeTime),
         sleepTime: timeStringToMinutes(sleepTime),
         motivationTone: tone,
-        isPremium: false,
+        subscriptionStatus: SubscriptionStatus.free,
       });
       await generateSchedule.mutateAsync(getTodayString());
       onComplete(name || "Friend");
